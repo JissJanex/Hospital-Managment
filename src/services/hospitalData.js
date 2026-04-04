@@ -151,3 +151,44 @@ export async function insertHospitalRecord(tableName, fields, formValues) {
 
   return data
 }
+
+const generatedColumns = {
+  bill: ['balance'],
+}
+
+export async function updateHospitalRecord(tableName, primaryKeyValue, fields, formValues) {
+  const supabase = getSupabaseClient()
+  const primaryKey = getTablePrimaryKey(tableName)
+  const payload = buildInsertPayload(tableName, fields, formValues)
+
+  for (const col of generatedColumns[tableName] ?? []) {
+    delete payload[col]
+  }
+
+  const { data, error } = await supabase
+    .from(tableName)
+    .update(payload)
+    .eq(primaryKey, primaryKeyValue)
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to update ${tableName}: ${error.message}`)
+  }
+
+  return data
+}
+
+export async function deleteHospitalRecord(tableName, primaryKeyValue) {
+  const supabase = getSupabaseClient()
+  const primaryKey = getTablePrimaryKey(tableName)
+
+  const { error } = await supabase
+    .from(tableName)
+    .delete()
+    .eq(primaryKey, primaryKeyValue)
+
+  if (error) {
+    throw new Error(`Failed to delete ${tableName}: ${error.message}`)
+  }
+}

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import DataTable from './components/DataTable'
 import AddEntityModal from './components/AddEntityModal'
+import RecordDetailModal from './components/RecordDetailModal'
 import OverviewPanel from './components/OverviewPanel'
 import Sidebar from './components/Sidebar'
 import StatsGrid from './components/StatsGrid'
@@ -14,6 +15,8 @@ import {
   fetchHospitalData,
   getTablePrimaryKey,
   insertHospitalRecord,
+  updateHospitalRecord,
+  deleteHospitalRecord,
 } from './services/hospitalData'
 import { dateOnly, dateTime, money } from './utils/formatters'
 
@@ -34,6 +37,9 @@ function App() {
   const [statusMessage, setStatusMessage] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [selectedRecord, setSelectedRecord] = useState(null)
+  const [detailError, setDetailError] = useState('')
+  const [isDetailSubmitting, setIsDetailSubmitting] = useState(false)
 
   const departmentData = hospitalData.department
   const doctorData = hospitalData.doctor
@@ -189,7 +195,6 @@ function App() {
   const modules = {
     department: {
       title: 'Department Registry',
-      subtitle: 'department(dept_id, dept_name, location, phone)',
       columns: [
         { key: 'dept_id', label: 'Dept ID' },
         { key: 'dept_name', label: 'Department Name' },
@@ -200,7 +205,6 @@ function App() {
     },
     doctor: {
       title: 'Doctor Directory',
-      subtitle: 'doctor(doctor_id, name, specialization, qualification, dept_id, ...)',
       columns: [
         { key: 'doctor_id', label: 'Doctor ID' },
         { key: 'name', label: 'Name' },
@@ -215,7 +219,6 @@ function App() {
     },
     patient: {
       title: 'Patient Registry',
-      subtitle: 'patient(patient_id, name, dob, gender, phone, email, ...)',
       columns: [
         { key: 'patient_id', label: 'Patient ID' },
         { key: 'name', label: 'Name' },
@@ -230,7 +233,6 @@ function App() {
     },
     appointment: {
       title: 'Appointment Scheduling',
-      subtitle: 'appointment(doctor_id + appointment_date + time_slot unique)',
       columns: [
         { key: 'appointment_id', label: 'Appointment ID' },
         { key: 'patient_id', label: 'Patient', render: (value) => patientLookup[value] ?? value },
@@ -245,7 +247,6 @@ function App() {
     },
     medical_record: {
       title: 'Medical Records',
-      subtitle: 'medical_record(record_id, patient_id, doctor_id, diagnosis, treatment, ...)',
       columns: [
         { key: 'record_id', label: 'Record ID' },
         { key: 'patient_id', label: 'Patient', render: (value) => patientLookup[value] ?? value },
@@ -259,7 +260,6 @@ function App() {
     },
     lab_test: {
       title: 'Lab Tests',
-      subtitle: 'lab_test(test_id, test_name, status, result_value, normal_range, price)',
       columns: [
         { key: 'test_id', label: 'Test ID' },
         { key: 'patient_id', label: 'Patient', render: (value) => patientLookup[value] ?? value },
@@ -273,7 +273,6 @@ function App() {
     },
     prescription: {
       title: 'Prescription Ledger',
-      subtitle: 'prescription(medicine_name, dosage, frequency, duration, quantity)',
       columns: [
         { key: 'prescription_id', label: 'Prescription ID' },
         { key: 'patient_id', label: 'Patient', render: (value) => patientLookup[value] ?? value },
@@ -288,7 +287,6 @@ function App() {
     },
     bill: {
       title: 'Billing & Invoices',
-      subtitle: 'bill(total_amount, paid_amount, balance, status, payment_method)',
       columns: [
         { key: 'bill_id', label: 'Bill ID' },
         { key: 'patient_id', label: 'Patient', render: (value) => patientLookup[value] ?? value },
@@ -334,7 +332,6 @@ function App() {
       const query = appliedSearch.trim().toLowerCase()
       return (
         module.title.toLowerCase().includes(query) ||
-        module.subtitle.toLowerCase().includes(query) ||
         module.rows.length > 0
       )
     }),
@@ -404,12 +401,81 @@ function App() {
         setLoadError(refreshMessage)
       }
 
-      setStatusMessage(`${config.title.replace(/^Add\s+/, '')} saved to Supabase.`)
+      setStatusMessage(`${config.title.replace(/^Add\s+/, '')} saved successfully.`)
       setModalSection(null)
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : 'Unable to create record.')
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const handleRowClick = (row) => {
+    setDetailError('')
+    setSelectedRecord(row)
+  }
+
+  const handleCloseDetail = () => {
+    if (isDetailSubmitting) return
+    setSelectedRecord(null)
+    setDetailError('')
+  }
+
+  const detailFields = useMemo(() => {
+    if (!selectedRecord || activeSection === 'overview') return []
+
+    const config = addEntityConfig[activeSection]
+    if (!config) return []
+
+    return config.fields.map((field) => ({
+      ...field,
+      options: field.optionsKey ? modalOptionSets[field.optionsKey] ?? [] : field.options,
+    }))
+  }, [selectedRecord, activeSection, modalOptionSets])
+
+  const handleUpdateRecord = async (formValues) => {
+    if (!selectedRecord || activeSection === 'overview') return
+
+    const primaryKey = getTablePrimaryKey(activeSection)
+    const primaryKeyValue = selectedRecord[primaryKey]
+    const config = addEntityConfig[activeSection]
+    if (!config) return
+
+    setIsDetailSubmitting(true)
+    setDetailError('')
+
+    try {
+      await updateHospitalRecord(activeSection, primaryKeyValue, config.fields, formValues)
+      const refreshedData = await fetchHospitalData()
+      setHospitalData(refreshedData)
+      setStatusMessage('Record updated successfully.')
+      setSelectedRecord(null)
+    } catch (error) {
+      setDetailError(error instanceof Error ? error.message : 'Unable to update record.')
+    } finally {
+      setIsDetailSubmitting(false)
+    }
+  }
+
+  const handleDeleteRecord = async () => {
+    if (!selectedRecord || activeSection === 'overview') return
+
+    const primaryKey = getTablePrimaryKey(activeSection)
+    const primaryKeyValue = selectedRecord[primaryKey]
+
+    setIsDetailSubmitting(true)
+    setDetailError('')
+
+    try {
+      await deleteHospitalRecord(activeSection, primaryKeyValue)
+      const refreshedData = await fetchHospitalData()
+      setHospitalData(refreshedData)
+      setStatusMessage('Record deleted successfully.')
+      setSelectedRecord(null)
+    } catch (error) {
+      setDetailError(error instanceof Error ? error.message : 'Unable to delete record.')
+    } finally {
+      setIsDetailSubmitting(false)
     }
   }
 
@@ -450,10 +516,10 @@ function App() {
         ) : (
           <DataTable
             title={filteredModules[activeSection].title}
-            subtitle={filteredModules[activeSection].subtitle}
             columns={filteredModules[activeSection].columns}
             rows={filteredModules[activeSection].rows}
             rowKey={getTablePrimaryKey(activeSection)}
+            onRowClick={handleRowClick}
             emptyMessage={
               isLoading
                 ? 'Loading records from Supabase...'
@@ -470,6 +536,19 @@ function App() {
         isSubmitting={isSubmitting}
         submitError={submitError}
       />
+
+      {selectedRecord ? (
+        <RecordDetailModal
+          record={selectedRecord}
+          fields={detailFields}
+          title={filteredModules[activeSection]?.title ?? 'Record'}
+          onClose={handleCloseDetail}
+          onUpdate={handleUpdateRecord}
+          onDelete={handleDeleteRecord}
+          isSubmitting={isDetailSubmitting}
+          submitError={detailError}
+        />
+      ) : null}
 
       {statusMessage ? (
         <div className="toast-stack" aria-live="polite" aria-atomic="true">

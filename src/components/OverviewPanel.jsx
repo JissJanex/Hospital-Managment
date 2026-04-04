@@ -1,10 +1,9 @@
 function OverviewPanel({ modules, onOpenModule }) {
   return (
     <section className="surface panel overview-panel">
-      <h2>Schema Aligned Modules</h2>
+      <h2>Modules</h2>
       <p>
-        The UI is mapped to your SQL design document. Select a module from the left to
-        view table structures and records aligned with fields and constraints.
+        Select a module from the left or below to view and manage records.
       </p>
 
       <div className="quick-grid">
@@ -17,7 +16,7 @@ function OverviewPanel({ modules, onOpenModule }) {
           Object.entries(modules).map(([key, module]) => (
             <article key={key} className="quick-card">
               <h3>{module.title}</h3>
-              <p>{module.subtitle}</p>
+              <p>{module.rows.length} record{module.rows.length !== 1 ? 's' : ''}</p>
               <button type="button" className="action-btn ghost" onClick={() => onOpenModule(key)}>
                 Open Module
               </button>

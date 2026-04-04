@@ -1,9 +1,9 @@
 function DataTable({
   title,
-  subtitle,
   columns,
   rows,
   rowKey,
+  onRowClick,
   emptyMessage = 'No records match your current search.',
 }) {
   return (
@@ -11,7 +11,6 @@ function DataTable({
       <header className="panel-header">
         <div>
           <h2>{title}</h2>
-          <p>{subtitle}</p>
         </div>
         <button type="button" className="action-btn ghost">
           Export CSV
@@ -36,7 +35,11 @@ function DataTable({
               </tr>
             ) : (
               rows.map((row) => (
-                <tr key={row[rowKey] ?? Object.values(row)[0]}>
+                <tr
+                  key={row[rowKey] ?? Object.values(row)[0]}
+                  className={onRowClick ? 'clickable-row' : undefined}
+                  onClick={onRowClick ? () => onRowClick(row) : undefined}
+                >
                   {columns.map((column) => (
                     <td key={`${row[rowKey] ?? Object.values(row)[0]}-${column.key}`}>
                       {column.render ? column.render(row[column.key], row) : row[column.key]}
