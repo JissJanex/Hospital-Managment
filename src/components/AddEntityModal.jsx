@@ -114,7 +114,7 @@ function AddEntityModal({ config, onClose, onSubmit, isSubmitting, submitError }
               Cancel
             </button>
             <button type="submit" className="action-btn primary" disabled={isSubmitting}>
-              {isSubmitting ? 'Saving...' : 'Save to Supabase'}
+              {isSubmitting ? 'Saving...' : 'Confirm'}
             </button>
           </footer>
         </form>
