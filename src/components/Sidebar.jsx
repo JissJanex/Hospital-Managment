@@ -8,8 +8,8 @@ function Sidebar({ navigation, activeSection, onSectionChange, onOpenAddModal })
       <div className="brand">
         <span className="brand-mark">+</span>
         <div>
-          <h1>City General</h1>
-          <p>Medical Center</p>
+          <h1>Hosptial</h1>
+          <p>mangement systme</p>
         </div>
       </div>
 

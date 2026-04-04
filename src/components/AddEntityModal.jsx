@@ -58,8 +58,9 @@ function AddEntityModal({ config, onClose, onSubmit, isSubmitting, submitError }
           </button>
         </header>
 
-        <form onSubmit={handleSubmit}>
-          <div className="field-grid">
+        <form onSubmit={handleSubmit} className="modal-form">
+          <div className="modal-body">
+            <div className="field-grid">
             {fields.map((field) => (
               <label key={field.name} className="field-control">
                 <span>
@@ -69,7 +70,7 @@ function AddEntityModal({ config, onClose, onSubmit, isSubmitting, submitError }
                 {field.control === 'select' ? (
                   <select
                     required={field.required}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || field.disabled}
                     value={formValues[field.name]}
                     onChange={(event) => handleChange(field.name, event.target.value)}
                   >
@@ -83,7 +84,7 @@ function AddEntityModal({ config, onClose, onSubmit, isSubmitting, submitError }
                 ) : field.control === 'textarea' ? (
                   <textarea
                     required={field.required}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || field.disabled}
                     value={formValues[field.name]}
                     onChange={(event) => handleChange(field.name, event.target.value)}
                     placeholder={field.label}
@@ -94,17 +95,19 @@ function AddEntityModal({ config, onClose, onSubmit, isSubmitting, submitError }
                     type={field.type}
                     required={field.required}
                     step={field.step}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || field.disabled}
                     value={formValues[field.name]}
                     onChange={(event) => handleChange(field.name, event.target.value)}
                     placeholder={field.label}
                   />
                 )}
+                {field.helpText ? <small className="field-help">{field.helpText}</small> : null}
               </label>
             ))}
-          </div>
+            </div>
 
-          {submitError ? <p className="form-message error-text">{submitError}</p> : null}
+            {submitError ? <p className="form-message error-text">{submitError}</p> : null}
+          </div>
 
           <footer className="modal-footer">
             <button type="button" className="action-btn ghost" onClick={onClose} disabled={isSubmitting}>

@@ -2,8 +2,8 @@ function Topbar({ searchValue, onSearchChange, onSearchSubmit }) {
   return (
     <header className="topbar surface">
       <div>
-        <p className="eyebrow">Clinical Zen HMS</p>
-        <h2>Hospital Management Interface</h2>
+        <p className="eyebrow">Hosptial mangement systme</p>
+        <h2>Hosptial mangement systme</h2>
       </div>
       <form className="search-form" onSubmit={onSearchSubmit}>
         <input

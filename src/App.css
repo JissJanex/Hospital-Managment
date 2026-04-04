@@ -152,12 +152,6 @@ nav {
   color: #8c2f2f;
 }
 
-.success-banner {
-  border-color: #bfdfc8;
-  background: #eefaf1;
-  color: #12623d;
-}
-
 .topbar {
   border-radius: 16px;
   padding: 16px 20px;
@@ -371,13 +365,17 @@ td {
   place-items: center;
   z-index: 30;
   padding: 18px;
+  overflow-y: auto;
 }
 
 .modal-card {
   width: min(860px, 100%);
+  max-height: calc(100vh - 36px);
   border-radius: 18px;
   padding: 18px;
   background: #fff;
+  display: flex;
+  flex-direction: column;
 }
 
 .modal-header {
@@ -414,10 +412,22 @@ td {
 }
 
 .field-grid {
-  margin-top: 16px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.modal-body {
+  margin-top: 16px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .field-control {
@@ -454,6 +464,11 @@ td {
   resize: vertical;
 }
 
+.field-help {
+  color: var(--ink-500);
+  font: 500 0.76rem/1.35 var(--font-body);
+}
+
 .form-message {
   margin: 14px 0 0;
   padding: 10px 12px;
@@ -481,6 +496,50 @@ td {
   justify-content: flex-end;
   gap: 10px;
   margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #e8edf7;
+  background: #fff;
+  position: sticky;
+  bottom: 0;
+}
+
+.toast-stack {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 60;
+  pointer-events: none;
+}
+
+.toast {
+  min-width: min(360px, calc(100vw - 40px));
+  max-width: 420px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid #bfdfc8;
+  background: #eefaf1;
+  color: #12623d;
+  box-shadow: 0 14px 32px -20px rgba(5, 51, 26, 0.35);
+  pointer-events: auto;
+}
+
+.toast-success {
+  border-color: #bfdfc8;
+  background: #eefaf1;
+  color: #12623d;
+}
+
+.toast-close {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: 700 0.95rem/1 var(--font-body);
+  padding: 2px;
 }
 
 @media (max-width: 1200px) {
@@ -520,5 +579,16 @@ td {
 @media (max-width: 680px) {
   .stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .toast-stack {
+    top: 12px;
+    right: 12px;
+    left: 12px;
+  }
+
+  .toast {
+    min-width: 100%;
+    max-width: 100%;
   }
 }

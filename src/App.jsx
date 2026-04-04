@@ -17,6 +17,12 @@ import {
 } from './services/hospitalData'
 import { dateOnly, dateTime, money } from './utils/formatters'
 
+const relationCopy = {
+  department: { singular: 'department', plural: 'departments' },
+  doctor: { singular: 'doctor', plural: 'doctors' },
+  patient: { singular: 'patient', plural: 'patients' },
+}
+
 function App() {
   const [hospitalData, setHospitalData] = useState(emptyHospitalData)
   const [activeSection, setActiveSection] = useState('overview')
@@ -77,6 +83,20 @@ function App() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!statusMessage) {
+      return undefined
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setStatusMessage('')
+    }, 3000)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [statusMessage])
+
   const deptLookup = useMemo(
     () => Object.fromEntries(departmentData.map((dept) => [dept.dept_id, dept.dept_name])),
     [departmentData],
@@ -94,15 +114,15 @@ function App() {
     () => ({
       department: departmentData.map((department) => ({
         value: String(department.dept_id),
-        label: `${department.dept_name} (#${department.dept_id})`,
+        label: `${department.dept_name}${department.location ? ` - ${department.location}` : ''}`,
       })),
       doctor: doctorData.map((doctor) => ({
         value: String(doctor.doctor_id),
-        label: `${doctor.name} (#${doctor.doctor_id})`,
+        label: `${doctor.name}${doctor.specialization ? ` - ${doctor.specialization}` : ''}`,
       })),
       patient: patientData.map((patient) => ({
         value: String(patient.patient_id),
-        label: `${patient.name} (#${patient.patient_id})`,
+        label: `${patient.name}${patient.phone ? ` - ${patient.phone}` : ''}`,
       })),
     }),
     [departmentData, doctorData, patientData],
@@ -124,9 +144,26 @@ function App() {
       fields: baseConfig.fields.map((field) => ({
         ...field,
         options: field.optionsKey ? modalOptionSets[field.optionsKey] ?? [] : field.options,
+        disabled:
+          field.optionsKey &&
+          (isLoading || (modalOptionSets[field.optionsKey] ?? []).length === 0),
+        placeholder: field.optionsKey
+          ? isLoading
+            ? `Loading ${relationCopy[field.optionsKey]?.plural ?? field.optionsKey}...`
+            : (modalOptionSets[field.optionsKey] ?? []).length === 0
+              ? `No ${relationCopy[field.optionsKey]?.plural ?? field.optionsKey} available`
+              : field.placeholder
+          : field.placeholder,
+        helpText: field.optionsKey
+          ? isLoading
+            ? `Loading available ${relationCopy[field.optionsKey]?.plural ?? field.optionsKey} from Supabase.`
+            : (modalOptionSets[field.optionsKey] ?? []).length === 0
+              ? `No ${relationCopy[field.optionsKey]?.plural ?? field.optionsKey} found. Add one first.`
+              : `Choose from ${(modalOptionSets[field.optionsKey] ?? []).length} available ${relationCopy[field.optionsKey]?.plural ?? field.optionsKey}.`
+          : field.helpText,
       })),
     }
-  }, [modalOptionSets, modalSection])
+  }, [isLoading, modalOptionSets, modalSection])
 
   const outstanding = billData.reduce((sum, bill) => sum + Number(bill.balance ?? 0), 0)
   const todayRevenue = billData.reduce((sum, bill) => sum + Number(bill.paid_amount ?? 0), 0)
@@ -400,10 +437,6 @@ function App() {
 
         {loadError ? <section className="surface sync-banner error-banner">{loadError}</section> : null}
 
-        {statusMessage ? (
-          <section className="surface sync-banner success-banner">{statusMessage}</section>
-        ) : null}
-
         <StatsGrid
           patientCount={patientData.length}
           doctorCount={doctorData.length}
@@ -437,6 +470,22 @@ function App() {
         isSubmitting={isSubmitting}
         submitError={submitError}
       />
+
+      {statusMessage ? (
+        <div className="toast-stack" aria-live="polite" aria-atomic="true">
+          <div className="toast toast-success">
+            <span>{statusMessage}</span>
+            <button
+              type="button"
+              className="toast-close"
+              onClick={() => setStatusMessage('')}
+              aria-label="Dismiss notification"
+            >
+              x
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
