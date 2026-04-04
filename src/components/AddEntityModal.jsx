@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 
-function AddEntityModal({ config, onClose }) {
+function AddEntityModal({ config, onClose, onSubmit, isSubmitting, submitError }) {
   const fields = useMemo(() => config?.fields ?? [], [config])
 
-  const initialValues = useMemo(() => Object.fromEntries(fields.map((field) => [field.name, ''])), [fields])
+  const initialValues = useMemo(
+    () =>
+      Object.fromEntries(fields.map((field) => [field.name, field.defaultValue ?? ''])),
+    [fields],
+  )
 
   const [formValues, setFormValues] = useState(initialValues)
 
@@ -19,7 +23,7 @@ function AddEntityModal({ config, onClose }) {
     setFormValues((prev) => ({ ...prev, [fieldName]: value }))
   }
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
 
     const missingRequired = fields.find(
@@ -31,7 +35,7 @@ function AddEntityModal({ config, onClose }) {
       return
     }
 
-    onClose()
+    await onSubmit(formValues)
   }
 
   return (
@@ -43,7 +47,13 @@ function AddEntityModal({ config, onClose }) {
             <h2 id="modal-title">{config.title}</h2>
             <p>{config.description}</p>
           </div>
-          <button type="button" className="close-btn" onClick={onClose} aria-label="Close modal">
+          <button
+            type="button"
+            className="close-btn"
+            onClick={onClose}
+            aria-label="Close modal"
+            disabled={isSubmitting}
+          >
             x
           </button>
         </header>
@@ -56,24 +66,52 @@ function AddEntityModal({ config, onClose }) {
                   {field.label}
                   {field.required ? <span className="required-tag">Required</span> : null}
                 </span>
-                <input
-                  type={field.type}
-                  required={field.required}
-                  step={field.step}
-                  value={formValues[field.name]}
-                  onChange={(event) => handleChange(field.name, event.target.value)}
-                  placeholder={field.label}
-                />
+                {field.control === 'select' ? (
+                  <select
+                    required={field.required}
+                    disabled={isSubmitting}
+                    value={formValues[field.name]}
+                    onChange={(event) => handleChange(field.name, event.target.value)}
+                  >
+                    <option value="">{field.placeholder ?? `Select ${field.label}`}</option>
+                    {(field.options ?? []).map((option) => (
+                      <option key={`${field.name}-${option.value}`} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : field.control === 'textarea' ? (
+                  <textarea
+                    required={field.required}
+                    disabled={isSubmitting}
+                    value={formValues[field.name]}
+                    onChange={(event) => handleChange(field.name, event.target.value)}
+                    placeholder={field.label}
+                    rows={4}
+                  />
+                ) : (
+                  <input
+                    type={field.type}
+                    required={field.required}
+                    step={field.step}
+                    disabled={isSubmitting}
+                    value={formValues[field.name]}
+                    onChange={(event) => handleChange(field.name, event.target.value)}
+                    placeholder={field.label}
+                  />
+                )}
               </label>
             ))}
           </div>
 
+          {submitError ? <p className="form-message error-text">{submitError}</p> : null}
+
           <footer className="modal-footer">
-            <button type="button" className="action-btn ghost" onClick={onClose}>
+            <button type="button" className="action-btn ghost" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </button>
-            <button type="submit" className="action-btn primary">
-              Save Draft
+            <button type="submit" className="action-btn primary" disabled={isSubmitting}>
+              {isSubmitting ? 'Saving...' : 'Save to Supabase'}
             </button>
           </footer>
         </form>

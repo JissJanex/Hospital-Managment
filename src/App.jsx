@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import DataTable from './components/DataTable'
 import AddEntityModal from './components/AddEntityModal'
@@ -6,48 +6,148 @@ import OverviewPanel from './components/OverviewPanel'
 import Sidebar from './components/Sidebar'
 import StatsGrid from './components/StatsGrid'
 import Topbar from './components/Topbar'
-import {
-  appointmentData,
-  billData,
-  departmentData,
-  doctorData,
-  labTestData,
-  medicalRecordData,
-  navigation,
-  patientData,
-  prescriptionData,
-} from './data/hmsData'
 import { addEntityConfig } from './config/addEntityConfig'
+import { navigation } from './config/navigation'
+import { isSupabaseConfigured, supabaseConfigError } from './lib/supabase'
+import {
+  emptyHospitalData,
+  fetchHospitalData,
+  getTablePrimaryKey,
+  insertHospitalRecord,
+} from './services/hospitalData'
 import { dateOnly, dateTime, money } from './utils/formatters'
 
 function App() {
+  const [hospitalData, setHospitalData] = useState(emptyHospitalData)
   const [activeSection, setActiveSection] = useState('overview')
   const [searchInput, setSearchInput] = useState('')
   const [appliedSearch, setAppliedSearch] = useState('')
   const [modalSection, setModalSection] = useState(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [statusMessage, setStatusMessage] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+
+  const departmentData = hospitalData.department
+  const doctorData = hospitalData.doctor
+  const patientData = hospitalData.patient
+  const appointmentData = hospitalData.appointment
+  const medicalRecordData = hospitalData.medical_record
+  const labTestData = hospitalData.lab_test
+  const prescriptionData = hospitalData.prescription
+  const billData = hospitalData.bill
+
+  useEffect(() => {
+    let isMounted = true
+
+    const loadData = async () => {
+      if (!isSupabaseConfigured) {
+        setLoadError(supabaseConfigError)
+        setIsLoading(false)
+        return
+      }
+
+      try {
+        const liveData = await fetchHospitalData()
+
+        if (!isMounted) {
+          return
+        }
+
+        setHospitalData(liveData)
+        setLoadError('')
+      } catch (error) {
+        if (!isMounted) {
+          return
+        }
+
+        setLoadError(error instanceof Error ? error.message : 'Unable to load live hospital data.')
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    loadData()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   const deptLookup = useMemo(
     () => Object.fromEntries(departmentData.map((dept) => [dept.dept_id, dept.dept_name])),
-    [],
+    [departmentData],
   )
   const patientLookup = useMemo(
     () => Object.fromEntries(patientData.map((patient) => [patient.patient_id, patient.name])),
-    [],
+    [patientData],
   )
   const doctorLookup = useMemo(
     () => Object.fromEntries(doctorData.map((doctor) => [doctor.doctor_id, doctor.name])),
-    [],
+    [doctorData],
   )
 
-  const outstanding = billData.reduce((sum, bill) => sum + bill.balance, 0)
-  const todayRevenue = billData.reduce((sum, bill) => sum + bill.paid_amount, 0)
-  const pendingAppointments = appointmentData.filter((item) => item.status !== 'Completed').length
-
-  const renderBadge = (value) => (
-    <span className={`status-chip status-${String(value).toLowerCase().replace(/\s+/g, '-')}`}>
-      {value}
-    </span>
+  const modalOptionSets = useMemo(
+    () => ({
+      department: departmentData.map((department) => ({
+        value: String(department.dept_id),
+        label: `${department.dept_name} (#${department.dept_id})`,
+      })),
+      doctor: doctorData.map((doctor) => ({
+        value: String(doctor.doctor_id),
+        label: `${doctor.name} (#${doctor.doctor_id})`,
+      })),
+      patient: patientData.map((patient) => ({
+        value: String(patient.patient_id),
+        label: `${patient.name} (#${patient.patient_id})`,
+      })),
+    }),
+    [departmentData, doctorData, patientData],
   )
+
+  const modalConfig = useMemo(() => {
+    if (!modalSection) {
+      return null
+    }
+
+    const baseConfig = addEntityConfig[modalSection]
+
+    if (!baseConfig) {
+      return null
+    }
+
+    return {
+      ...baseConfig,
+      fields: baseConfig.fields.map((field) => ({
+        ...field,
+        options: field.optionsKey ? modalOptionSets[field.optionsKey] ?? [] : field.options,
+      })),
+    }
+  }, [modalOptionSets, modalSection])
+
+  const outstanding = billData.reduce((sum, bill) => sum + Number(bill.balance ?? 0), 0)
+  const todayRevenue = billData.reduce((sum, bill) => sum + Number(bill.paid_amount ?? 0), 0)
+  const pendingAppointments = appointmentData.filter(
+    (item) => String(item.status ?? '').toLowerCase() !== 'completed',
+  ).length
+
+  const renderBadge = (value) => {
+    const label = value ?? 'Unknown'
+
+    return (
+      <span className={`status-chip status-${String(label).toLowerCase().replace(/\s+/g, '-')}`}>
+        {label}
+      </span>
+    )
+  }
+
+  const formatCurrency = (value) => money.format(Number(value ?? 0))
+  const formatDateOnly = (value) => (value ? dateOnly.format(new Date(value)) : 'N/A')
+  const formatDateTime = (value) => (value ? dateTime.format(new Date(value)) : 'N/A')
+  const formatTime = (value) => (value ? String(value).slice(0, 5) : 'N/A')
 
   const modules = {
     department: {
@@ -70,7 +170,7 @@ function App() {
         { key: 'specialization', label: 'Specialization' },
         { key: 'qualification', label: 'Qualification' },
         { key: 'dept_id', label: 'Department', render: (value) => deptLookup[value] ?? value },
-        { key: 'consultation_fee', label: 'Fee', render: (value) => money.format(value) },
+        { key: 'consultation_fee', label: 'Fee', render: formatCurrency },
         { key: 'status', label: 'Status', render: renderBadge },
         { key: 'available_days', label: 'Available Days' },
       ],
@@ -82,16 +182,12 @@ function App() {
       columns: [
         { key: 'patient_id', label: 'Patient ID' },
         { key: 'name', label: 'Name' },
-        { key: 'dob', label: 'DOB', render: (value) => dateOnly.format(new Date(value)) },
+        { key: 'dob', label: 'DOB', render: formatDateOnly },
         { key: 'gender', label: 'Gender' },
         { key: 'phone', label: 'Phone' },
         { key: 'blood_group', label: 'Blood Group' },
         { key: 'allergies', label: 'Allergies' },
-        {
-          key: 'registered_date',
-          label: 'Registered Date',
-          render: (value) => dateTime.format(new Date(value)),
-        },
+        { key: 'registered_date', label: 'Registered Date', render: formatDateTime },
       ],
       rows: patientData,
     },
@@ -102,19 +198,11 @@ function App() {
         { key: 'appointment_id', label: 'Appointment ID' },
         { key: 'patient_id', label: 'Patient', render: (value) => patientLookup[value] ?? value },
         { key: 'doctor_id', label: 'Doctor', render: (value) => doctorLookup[value] ?? value },
-        {
-          key: 'appointment_date',
-          label: 'Appointment Date',
-          render: (value) => dateOnly.format(new Date(value)),
-        },
-        { key: 'time_slot', label: 'Time Slot', render: (value) => value.slice(0, 5) },
+        { key: 'appointment_date', label: 'Appointment Date', render: formatDateOnly },
+        { key: 'time_slot', label: 'Time Slot', render: formatTime },
         { key: 'status', label: 'Status', render: renderBadge },
         { key: 'type', label: 'Type' },
-        {
-          key: 'created_at',
-          label: 'Created At',
-          render: (value) => dateTime.format(new Date(value)),
-        },
+        { key: 'created_at', label: 'Created At', render: formatDateTime },
       ],
       rows: appointmentData,
     },
@@ -125,7 +213,7 @@ function App() {
         { key: 'record_id', label: 'Record ID' },
         { key: 'patient_id', label: 'Patient', render: (value) => patientLookup[value] ?? value },
         { key: 'doctor_id', label: 'Doctor', render: (value) => doctorLookup[value] ?? value },
-        { key: 'visit_date', label: 'Visit Date', render: (value) => dateTime.format(new Date(value)) },
+        { key: 'visit_date', label: 'Visit Date', render: formatDateTime },
         { key: 'diagnosis', label: 'Diagnosis' },
         { key: 'treatment', label: 'Treatment' },
         { key: 'record_type', label: 'Type' },
@@ -140,9 +228,9 @@ function App() {
         { key: 'patient_id', label: 'Patient', render: (value) => patientLookup[value] ?? value },
         { key: 'doctor_id', label: 'Doctor', render: (value) => doctorLookup[value] ?? value },
         { key: 'test_name', label: 'Test Name' },
-        { key: 'order_date', label: 'Order Date', render: (value) => dateTime.format(new Date(value)) },
+        { key: 'order_date', label: 'Order Date', render: formatDateTime },
         { key: 'status', label: 'Status', render: renderBadge },
-        { key: 'price', label: 'Price', render: (value) => money.format(value) },
+        { key: 'price', label: 'Price', render: formatCurrency },
       ],
       rows: labTestData,
     },
@@ -167,11 +255,11 @@ function App() {
       columns: [
         { key: 'bill_id', label: 'Bill ID' },
         { key: 'patient_id', label: 'Patient', render: (value) => patientLookup[value] ?? value },
-        { key: 'bill_date', label: 'Bill Date', render: (value) => dateTime.format(new Date(value)) },
+        { key: 'bill_date', label: 'Bill Date', render: formatDateTime },
         { key: 'description', label: 'Description' },
-        { key: 'total_amount', label: 'Total', render: (value) => money.format(value) },
-        { key: 'paid_amount', label: 'Paid', render: (value) => money.format(value) },
-        { key: 'balance', label: 'Balance', render: (value) => money.format(value) },
+        { key: 'total_amount', label: 'Total', render: formatCurrency },
+        { key: 'paid_amount', label: 'Paid', render: formatCurrency },
+        { key: 'balance', label: 'Balance', render: formatCurrency },
         { key: 'status', label: 'Status', render: renderBadge },
         { key: 'payment_method', label: 'Payment Method' },
       ],
@@ -220,13 +308,81 @@ function App() {
     setAppliedSearch(searchInput)
   }
 
+  const handleOpenAddModal = (section) => {
+    setSubmitError('')
+    setStatusMessage('')
+    setModalSection(section)
+  }
+
+  const handleCloseAddModal = () => {
+    if (isSubmitting) {
+      return
+    }
+
+    setSubmitError('')
+    setModalSection(null)
+  }
+
+  const handleCreateEntity = async (formValues) => {
+    if (!modalSection) {
+      return
+    }
+
+    const config = modalConfig
+
+    if (!config) {
+      return
+    }
+
+    setIsSubmitting(true)
+    setSubmitError('')
+    setStatusMessage('')
+
+    try {
+      const createdRecord = await insertHospitalRecord(modalSection, config.fields, formValues)
+      const primaryKey = getTablePrimaryKey(modalSection)
+
+      setHospitalData((currentData) => ({
+        ...currentData,
+        [modalSection]: primaryKey
+          ? [
+              createdRecord,
+              ...currentData[modalSection].filter(
+                (record) => record[primaryKey] !== createdRecord[primaryKey],
+              ),
+            ]
+          : [createdRecord, ...currentData[modalSection]],
+      }))
+
+      try {
+        const refreshedData = await fetchHospitalData()
+        setHospitalData(refreshedData)
+        setLoadError('')
+      } catch (refreshError) {
+        const refreshMessage =
+          refreshError instanceof Error
+            ? refreshError.message
+            : 'The record was created, but the latest data could not be refreshed.'
+
+        setLoadError(refreshMessage)
+      }
+
+      setStatusMessage(`${config.title.replace(/^Add\s+/, '')} saved to Supabase.`)
+      setModalSection(null)
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Unable to create record.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   return (
     <div className="hms-shell">
       <Sidebar
         navigation={navigation}
         activeSection={activeSection}
         onSectionChange={setActiveSection}
-        onOpenAddModal={setModalSection}
+        onOpenAddModal={handleOpenAddModal}
       />
 
       <main className="main-content">
@@ -236,12 +392,24 @@ function App() {
           onSearchSubmit={handleSearchSubmit}
         />
 
+        {isLoading ? (
+          <section className="surface sync-banner">
+            Loading live hospital data from Supabase...
+          </section>
+        ) : null}
+
+        {loadError ? <section className="surface sync-banner error-banner">{loadError}</section> : null}
+
+        {statusMessage ? (
+          <section className="surface sync-banner success-banner">{statusMessage}</section>
+        ) : null}
+
         <StatsGrid
           patientCount={patientData.length}
           doctorCount={doctorData.length}
           pendingAppointments={pendingAppointments}
-          outstandingTotal={money.format(outstanding)}
-          revenueTotal={money.format(todayRevenue)}
+          outstandingTotal={formatCurrency(outstanding)}
+          revenueTotal={formatCurrency(todayRevenue)}
         />
 
         {activeSection === 'overview' ? (
@@ -252,11 +420,23 @@ function App() {
             subtitle={filteredModules[activeSection].subtitle}
             columns={filteredModules[activeSection].columns}
             rows={filteredModules[activeSection].rows}
+            rowKey={getTablePrimaryKey(activeSection)}
+            emptyMessage={
+              isLoading
+                ? 'Loading records from Supabase...'
+                : 'No records match your current search.'
+            }
           />
         )}
       </main>
 
-      <AddEntityModal config={addEntityConfig[modalSection] ?? null} onClose={() => setModalSection(null)} />
+      <AddEntityModal
+        config={modalConfig}
+        onClose={handleCloseAddModal}
+        onSubmit={handleCreateEntity}
+        isSubmitting={isSubmitting}
+        submitError={submitError}
+      />
     </div>
   )
 }

@@ -1,4 +1,11 @@
-function DataTable({ title, subtitle, columns, rows }) {
+function DataTable({
+  title,
+  subtitle,
+  columns,
+  rows,
+  rowKey,
+  emptyMessage = 'No records match your current search.',
+}) {
   return (
     <section className="surface panel table-panel">
       <header className="panel-header">
@@ -24,14 +31,14 @@ function DataTable({ title, subtitle, columns, rows }) {
             {rows.length === 0 ? (
               <tr>
                 <td colSpan={columns.length} className="empty-row">
-                  No records match your current search.
+                  {emptyMessage}
                 </td>
               </tr>
             ) : (
               rows.map((row) => (
-                <tr key={Object.values(row)[0]}>
+                <tr key={row[rowKey] ?? Object.values(row)[0]}>
                   {columns.map((column) => (
-                    <td key={`${Object.values(row)[0]}-${column.key}`}>
+                    <td key={`${row[rowKey] ?? Object.values(row)[0]}-${column.key}`}>
                       {column.render ? column.render(row[column.key], row) : row[column.key]}
                     </td>
                   ))}
