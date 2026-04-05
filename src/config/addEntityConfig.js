@@ -39,12 +39,6 @@ const labStatusOptions = [
   { value: 'Cancelled', label: 'Cancelled' },
 ]
 
-const billStatusOptions = [
-  { value: 'Pending', label: 'Pending' },
-  { value: 'Paid', label: 'Paid' },
-  { value: 'Partially Paid', label: 'Partially Paid' },
-]
-
 const paymentMethodOptions = [
   { value: 'Cash', label: 'Cash' },
   { value: 'Card', label: 'Card' },
@@ -293,15 +287,6 @@ export const addEntityConfig = {
       { name: 'description', label: 'Description', type: 'text', control: 'textarea', required: false },
       { name: 'total_amount', label: 'Total Amount', type: 'number', required: true, step: '0.01' },
       { name: 'paid_amount', label: 'Paid Amount', type: 'number', required: false, step: '0.01' },
-      {
-        name: 'status',
-        label: 'Status',
-        type: 'text',
-        control: 'select',
-        options: billStatusOptions,
-        defaultValue: 'Pending',
-        required: true,
-      },
       {
         name: 'payment_method',
         label: 'Payment Method',

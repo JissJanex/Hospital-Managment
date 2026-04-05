@@ -101,15 +101,36 @@ function buildInsertPayload(tableName, fields, formValues) {
   }, {})
 
   if (tableName === 'bill') {
-    const totalAmount = Number(payload.total_amount ?? 0)
-    const paidAmount = Number(payload.paid_amount ?? 0)
-
     if (!('paid_amount' in payload) && 'total_amount' in payload) {
       payload.paid_amount = 0
     }
 
-    if (!('balance' in payload) && 'total_amount' in payload) {
-      payload.balance = totalAmount - paidAmount
+    if ('total_amount' in payload && 'paid_amount' in payload) {
+      const totalAmount = Number(payload.total_amount)
+      const paidAmount = Number(payload.paid_amount)
+
+      if (!Number.isFinite(totalAmount) || !Number.isFinite(paidAmount)) {
+        throw new Error('Total amount and paid amount must be valid numbers.')
+      }
+
+      if (paidAmount > totalAmount) {
+        throw new Error('Paid amount cannot be greater than total amount.')
+      }
+
+      const balance = totalAmount - paidAmount
+
+      if (balance <= 0) {
+        payload.status = 'Paid'
+      } else if (paidAmount > 0) {
+        payload.status = 'Partially Paid'
+      } else {
+        payload.status = 'Pending'
+      }
+    }
+
+    // Do NOT send balance, let the database compute it
+    if ('balance' in payload) {
+      delete payload.balance
     }
   }
 
