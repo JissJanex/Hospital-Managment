@@ -87,6 +87,38 @@ function RecordDetailModal({
       )
     }
 
+    if (field.name === 'available_days') {
+      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+      const selected = String(value)
+        .split(',')
+        .map((p) => p.trim())
+        .filter(Boolean)
+
+      return (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {days.map((d) => (
+            <label key={d} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input
+                type="checkbox"
+                checked={selected.includes(d)}
+                onChange={(e) => {
+                  const next = new Set(selected)
+                  if (e.target.checked) next.add(d)
+                  else next.delete(d)
+
+                  const order = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+                  const ordered = order.filter((w) => next.has(w))
+                  handleChange(field.name, ordered.join(', '))
+                }}
+                disabled={isSubmitting}
+              />
+              <span>{d}</span>
+            </label>
+          ))}
+        </div>
+      )
+    }
+
     return (
       <input
         type={field.type ?? 'text'}

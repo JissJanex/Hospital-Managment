@@ -11,8 +11,8 @@ export const supabaseConfigError =
 export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
-        persistSession: false,
-        autoRefreshToken: false,
+        persistSession: true,
+        autoRefreshToken: true,
       },
     })
   : null
@@ -23,4 +23,48 @@ export function getSupabaseClient() {
   }
 
   return supabase
+}
+
+export async function getCurrentSession() {
+  const client = getSupabaseClient()
+  const { data, error } = await client.auth.getSession()
+
+  if (error) {
+    throw new Error(`Failed to get auth session: ${error.message}`)
+  }
+
+  return data.session
+}
+
+export function subscribeToAuthChanges(onChange) {
+  const client = getSupabaseClient()
+  const {
+    data: { subscription },
+  } = client.auth.onAuthStateChange((_event, session) => {
+    onChange(session)
+  })
+
+  return () => {
+    subscription.unsubscribe()
+  }
+}
+
+export async function signInWithEmail(email, password) {
+  const client = getSupabaseClient()
+  const { data, error } = await client.auth.signInWithPassword({ email, password })
+
+  if (error) {
+    throw new Error(`Failed to sign in: ${error.message}`)
+  }
+
+  return data.session
+}
+
+export async function signOutUser() {
+  const client = getSupabaseClient()
+  const { error } = await client.auth.signOut()
+
+  if (error) {
+    throw new Error(`Failed to sign out: ${error.message}`)
+  }
 }

@@ -7,9 +7,18 @@ import OverviewPanel from './components/OverviewPanel'
 import Sidebar from './components/Sidebar'
 import StatsGrid from './components/StatsGrid'
 import Topbar from './components/Topbar'
+import SignInPage from './components/SignInPage'
+import ConfirmLogoutModal from './components/ConfirmLogoutModal'
 import { addEntityConfig } from './config/addEntityConfig'
 import { navigation } from './config/navigation'
-import { isSupabaseConfigured, supabaseConfigError } from './lib/supabase'
+import {
+  getCurrentSession,
+  isSupabaseConfigured,
+  signInWithEmail,
+  signOutUser,
+  subscribeToAuthChanges,
+  supabaseConfigError,
+} from './lib/supabase'
 import {
   emptyHospitalData,
   fetchHospitalData,
@@ -27,6 +36,12 @@ const relationCopy = {
 }
 
 function App() {
+  const [session, setSession] = useState(null)
+  const [isAuthLoading, setIsAuthLoading] = useState(true)
+  const [authError, setAuthError] = useState('')
+  const [isSigningIn, setIsSigningIn] = useState(false)
+  const [isSigningOut, setIsSigningOut] = useState(false)
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [hospitalData, setHospitalData] = useState(emptyHospitalData)
   const [activeSection, setActiveSection] = useState('overview')
   const [searchInput, setSearchInput] = useState('')
@@ -53,12 +68,81 @@ function App() {
   useEffect(() => {
     let isMounted = true
 
+    if (!isSupabaseConfigured) {
+      setAuthError(supabaseConfigError)
+      setIsAuthLoading(false)
+      return undefined
+    }
+
+    const initializeAuth = async () => {
+      try {
+        const activeSession = await getCurrentSession()
+
+        if (!isMounted) {
+          return
+        }
+
+        setSession(activeSession)
+        setAuthError('')
+      } catch (error) {
+        if (!isMounted) {
+          return
+        }
+
+        setAuthError(
+          error instanceof Error
+            ? error.message
+            : 'Unable to verify your authentication session.',
+        )
+      } finally {
+        if (isMounted) {
+          setIsAuthLoading(false)
+        }
+      }
+    }
+
+    initializeAuth()
+
+    const unsubscribe = subscribeToAuthChanges((nextSession) => {
+      if (!isMounted) {
+        return
+      }
+
+      setSession(nextSession)
+
+      if (nextSession) {
+        setAuthError('')
+      }
+    })
+
+    return () => {
+      isMounted = false
+      unsubscribe()
+    }
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+
     const loadData = async () => {
+      if (isAuthLoading) {
+        return
+      }
+
       if (!isSupabaseConfigured) {
         setLoadError(supabaseConfigError)
         setIsLoading(false)
         return
       }
+
+      if (!session) {
+        setHospitalData(emptyHospitalData)
+        setLoadError('')
+        setIsLoading(false)
+        return
+      }
+
+      setIsLoading(true)
 
       try {
         const liveData = await fetchHospitalData()
@@ -87,7 +171,7 @@ function App() {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [isAuthLoading, session])
 
   useEffect(() => {
     if (!statusMessage) {
@@ -125,6 +209,7 @@ function App() {
       doctor: doctorData.map((doctor) => ({
         value: String(doctor.doctor_id),
         label: `${doctor.name}${doctor.specialization ? ` - ${doctor.specialization}` : ''}`,
+        availableDays: doctor.available_days ?? '',
       })),
       patient: patientData.map((patient) => ({
         value: String(patient.patient_id),
@@ -342,6 +427,54 @@ function App() {
     setAppliedSearch(searchInput)
   }
 
+  const handleLogoutRequest = () => {
+    setShowLogoutConfirm(true)
+  }
+
+  const handleSignIn = async (email, password) => {
+    if (!isSupabaseConfigured) {
+      setAuthError(supabaseConfigError)
+      return
+    }
+
+    setIsSigningIn(true)
+    setAuthError('')
+
+    try {
+      await signInWithEmail(email, password)
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : 'Unable to sign in.')
+    } finally {
+      setIsSigningIn(false)
+    }
+  }
+
+  const handleSignOut = async () => {
+    if (!isSupabaseConfigured) {
+      setAuthError(supabaseConfigError)
+      return
+    }
+
+    setIsSigningOut(true)
+    setAuthError('')
+    setStatusMessage('')
+
+    try {
+      await signOutUser()
+      setShowLogoutConfirm(false)
+      setSelectedRecord(null)
+      setModalSection(null)
+      setSubmitError('')
+      setDetailError('')
+      setSearchInput('')
+      setAppliedSearch('')
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : 'Unable to sign out.')
+    } finally {
+      setIsSigningOut(false)
+    }
+  }
+
   const handleOpenAddModal = (section) => {
     setSubmitError('')
     setStatusMessage('')
@@ -479,6 +612,29 @@ function App() {
     }
   }
 
+  if (isAuthLoading) {
+    return (
+      <div className="signin-shell">
+        <section className="signin-card surface" aria-live="polite">
+          <p className="signin-tag">Hospital Management Platform</p>
+          <h1>Checking your secure session...</h1>
+          <p className="signin-subtitle">Connecting to Supabase authentication.</p>
+        </section>
+      </div>
+    )
+  }
+
+  if (!session) {
+    return (
+      <SignInPage
+        onSignIn={handleSignIn}
+        isSubmitting={isSigningIn}
+        submitError={authError}
+        configError={!isSupabaseConfigured ? supabaseConfigError : ''}
+      />
+    )
+  }
+
   return (
     <div className="hms-shell">
       <Sidebar
@@ -493,6 +649,9 @@ function App() {
           searchValue={searchInput}
           onSearchChange={setSearchInput}
           onSearchSubmit={handleSearchSubmit}
+          currentUser={session.user?.email ?? 'Authenticated user'}
+          onLogoutRequest={handleLogoutRequest}
+          isLoggingOut={isSigningOut}
         />
 
         {isLoading ? (
@@ -502,6 +661,8 @@ function App() {
         ) : null}
 
         {loadError ? <section className="surface sync-banner error-banner">{loadError}</section> : null}
+
+        {authError ? <section className="surface sync-banner error-banner">{authError}</section> : null}
 
         <StatsGrid
           patientCount={patientData.length}
@@ -530,6 +691,7 @@ function App() {
       </main>
 
       <AddEntityModal
+        key={modalSection ? `${modalSection}-${Date.now()}` : undefined}
         config={modalConfig}
         onClose={handleCloseAddModal}
         onSubmit={handleCreateEntity}
@@ -547,6 +709,15 @@ function App() {
           onDelete={handleDeleteRecord}
           isSubmitting={isDetailSubmitting}
           submitError={detailError}
+        />
+      ) : null}
+
+      {showLogoutConfirm ? (
+        <ConfirmLogoutModal
+          onConfirm={handleSignOut}
+          onCancel={() => setShowLogoutConfirm(false)}
+          isProcessing={isSigningOut}
+          error={authError}
         />
       ) : null}
 

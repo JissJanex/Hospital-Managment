@@ -12,9 +12,6 @@ function DataTable({
         <div>
           <h2>{title}</h2>
         </div>
-        <button type="button" className="action-btn ghost">
-          Export CSV
-        </button>
       </header>
 
       <div className="table-wrap">
