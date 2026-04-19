@@ -128,7 +128,7 @@ function buildInsertPayload(tableName, fields, formValues) {
       }
     }
 
-    // Do NOT send balance, let the database compute it
+    // Balance is derived on the frontend and should never be persisted.
     if ('balance' in payload) {
       delete payload.balance
     }
@@ -173,18 +173,10 @@ export async function insertHospitalRecord(tableName, fields, formValues) {
   return data
 }
 
-const generatedColumns = {
-  bill: ['balance'],
-}
-
 export async function updateHospitalRecord(tableName, primaryKeyValue, fields, formValues) {
   const supabase = getSupabaseClient()
   const primaryKey = getTablePrimaryKey(tableName)
   const payload = buildInsertPayload(tableName, fields, formValues)
-
-  for (const col of generatedColumns[tableName] ?? []) {
-    delete payload[col]
-  }
 
   const { data, error } = await supabase
     .from(tableName)

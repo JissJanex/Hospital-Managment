@@ -35,6 +35,17 @@ const relationCopy = {
   patient: { singular: 'patient', plural: 'patients' },
 }
 
+function calculateBillBalance(bill) {
+  const totalAmount = Number(bill?.total_amount ?? 0)
+  const paidAmount = Number(bill?.paid_amount ?? 0)
+
+  if (!Number.isFinite(totalAmount) || !Number.isFinite(paidAmount)) {
+    return 0
+  }
+
+  return Math.max(totalAmount - paidAmount, 0)
+}
+
 function App() {
   const [session, setSession] = useState(null)
   const [isAuthLoading, setIsAuthLoading] = useState(true)
@@ -256,7 +267,16 @@ function App() {
     }
   }, [isLoading, modalOptionSets, modalSection])
 
-  const outstanding = billData.reduce((sum, bill) => sum + Number(bill.balance ?? 0), 0)
+  const billDataWithBalance = useMemo(
+    () =>
+      billData.map((bill) => ({
+        ...bill,
+        balance: calculateBillBalance(bill),
+      })),
+    [billData],
+  )
+
+  const outstanding = billDataWithBalance.reduce((sum, bill) => sum + bill.balance, 0)
   const todayRevenue = billData.reduce((sum, bill) => sum + Number(bill.paid_amount ?? 0), 0)
   const pendingAppointments = appointmentData.filter(
     (item) => String(item.status ?? '').toLowerCase() !== 'completed',
@@ -383,7 +403,7 @@ function App() {
         { key: 'status', label: 'Status', render: renderBadge },
         { key: 'payment_method', label: 'Payment Method' },
       ],
-      rows: billData,
+      rows: billDataWithBalance,
     },
   }
 
