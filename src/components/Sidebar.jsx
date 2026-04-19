@@ -22,8 +22,8 @@ function Sidebar({ navigation, activeSection, onSectionChange, onOpenAddModal })
             </svg>
           </span>
           <div>
-            <h1>Hosptial</h1>
-            <p>mangement systme</p>
+            <h1>Hospital</h1>
+            <p>mangement system</p>
           </div>
       </div>
 
