@@ -58,8 +58,6 @@ Hospital-Managment/
 		config/
 			addEntityConfig.js
 			navigation.js
-		data/
-			hmsData.js
 		lib/
 			supabase.js
 		services/
